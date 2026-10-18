@@ -368,7 +368,7 @@ async function nanoPrompt(sys,userText,llmst,t){
     let ans='';
     for await(const chunk of session.promptStreaming(userText)){ans=chunk;llmout.innerHTML=md(ans)}
     // Nano recrache parfois le tour de parole : on nettoie les préfixes de rôle.
-    return ans.replace(/^\s*(User|Assistant|System|Model)\s*:\s*/gim,'').trim();
+    return ans.replace(/^\\s*(User|Assistant|System|Model)\\s*:\\s*/gim,'').trim();
   }finally{if(session.destroy)session.destroy()}
 }
 /* Nano sans systemPrompt fiable : la consigne va DANS le user message,
