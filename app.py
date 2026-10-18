@@ -361,18 +361,18 @@ async function nanoSession(sys,llmst,t){
     });
   }});
 }
-async function nanoAttempt(sys,input,llmst,t){
+async function nanoAttempt(sys,input,llmst,t,render=true){
   // Session neuve PAR tentative : une erreur mid-stream laisse la session
   // polluée — jamais de fallback sur la même session.
   const session=await nanoSession(sys,llmst,t);
   try{
     let ans='';
     for await(const chunk of session.promptStreaming(input)){
-      ans=chunk;llmout.innerHTML=md(ans)}
+      ans=chunk;if(render)llmout.innerHTML=md(ans)}
     return ans;
   }finally{if(session.destroy)session.destroy()}
 }
-async function nanoPrompt(sys,userText,llmst,t){
+async function nanoPrompt(sys,userText,llmst,t,render=true){
   // 1) préfixe assistant : le modèle CONTINUE depuis « Réponse : » — il ne peut
   //    plus générer le tour « User: … End. Model: »
   // 2) tout échec → nouvelle session + prompt string simple
@@ -380,8 +380,8 @@ async function nanoPrompt(sys,userText,llmst,t){
   try{
     ans=await nanoAttempt(sys,[
       {role:'user',content:userText},
-      {role:'assistant',content:'Réponse :\\n',prefix:true}],llmst,t);
-  }catch{ans=await nanoAttempt(sys,userText,llmst,t)}
+      {role:'assistant',content:'Réponse :\\n',prefix:true}],llmst,t,render);
+  }catch{ans=await nanoAttempt(sys,userText,llmst,t,render)}
   ans=ans.replace(/^\\s*(User|Assistant|System|Model|End)\\s*[:.]\\s*/gim,'')
          .replace(/^\\s*Réponse\\s*:\\s*/,'').trim();
   if(isEcho(ans,userText))throw new Error('echo: Nano a répété le prompt');
@@ -427,7 +427,7 @@ async function runNano(sys,title,segs,llmst,t){
   // prêt (téléchargement/chargement en cours) — on aborte avant le map.
   llmst.textContent=`⏳ ${t.name} — vérification du modèle…`;
   let warm='';
-  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t)}catch{}
+  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t,false)}catch{}
   if(!/^\\s*ok\\b/i.test(warm))
     throw new Error('Gemini Nano ne répond pas correctement encore '+
       '(modèle en cours de téléchargement/chargement ?) — réessaie dans 1 min');
