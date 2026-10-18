@@ -603,27 +603,46 @@ _PLAYER_CACHE = {}
 _PLAYER_TTL = 300  # secondes — évite de re-fetcher le player à chaque requête
 
 
+# Variantes client Innertube : YouTube flague un couple IP+client de façon
+# intermittente (LOGIN_REQUIRED / ERROR) — on enchaîne les variantes.
+_CLIENTS = [
+    ({"clientName": "ANDROID", "clientVersion": "20.10.38",
+      "androidSdkVersion": 30, "hl": "fr", "gl": "FR"},
+     "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip"),
+    ({"clientName": "ANDROID", "clientVersion": "20.12.46",
+      "androidSdkVersion": 34, "hl": "fr", "gl": "FR"},
+     "com.google.android.youtube/20.12.46 (Linux; U; Android 14) gzip"),
+]
+
+
 def innertube_player(vid: str):
     cached = _PLAYER_CACHE.get(vid)
     if cached and time.time() - cached[0] < _PLAYER_TTL:
         return cached[1]
-    body = json.dumps({
-        "context": {"client": {
-            "clientName": "ANDROID", "clientVersion": "20.10.38",
-            "androidSdkVersion": 30, "hl": "fr", "gl": "FR"}},
-        "videoId": vid}).encode()
-    player = http_json(
-        "https://www.youtube.com/youtubei/v1/player", body,
-        {"Content-Type": "application/json",
-         "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip"})
-    ps = player.get("playabilityStatus", {})
-    if ps.get("status") != "OK":
-        raise RuntimeError(
-            f"vidéo non lisible : {ps.get('status')} {ps.get('reason', '')}")
-    if len(_PLAYER_CACHE) > 200:
-        _PLAYER_CACHE.clear()
-    _PLAYER_CACHE[vid] = (time.time(), player)
-    return player
+    last = None
+    for ctx, ua in _CLIENTS:
+        body = json.dumps({"context": {"client": ctx},
+                           "videoId": vid}).encode()
+        try:
+            player = http_json(
+                "https://www.youtube.com/youtubei/v1/player", body,
+                {"Content-Type": "application/json", "User-Agent": ua})
+        except Exception as e:
+            last = e
+            continue
+        ps = player.get("playabilityStatus", {})
+        status, reason = ps.get("status"), ps.get("reason", "")
+        if status == "OK":
+            if len(_PLAYER_CACHE) > 200:
+                _PLAYER_CACHE.clear()
+            _PLAYER_CACHE[vid] = (time.time(), player)
+            return player
+        last = RuntimeError(
+            "YouTube demande une vérification anti-bot "
+            "(LOGIN_REQUIRED) — réessaie dans quelques minutes"
+            if status == "LOGIN_REQUIRED"
+            else f"vidéo non lisible : {status} {reason}")
+    raise last if isinstance(last, Exception) else RuntimeError(str(last))
 
 
 def caption_info(player):
