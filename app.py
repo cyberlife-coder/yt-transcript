@@ -361,25 +361,31 @@ async function nanoSession(sys,llmst,t){
     });
   }});
 }
-async function nanoPrompt(sys,userText,llmst,t){
-  // Session neuve par appel : chaque prompt() s'ajoute au contexte de la session.
+async function nanoAttempt(sys,input,llmst,t){
+  // Session neuve PAR tentative : une erreur mid-stream laisse la session
+  // polluée — jamais de fallback sur la même session.
   const session=await nanoSession(sys,llmst,t);
   try{
     let ans='';
-    // Préfixe assistant : le modèle CONTINUE depuis "Réponse :" — il ne peut
-    // plus générer le tour « User: … End. Model: » (fallback si vieux Chrome).
-    let stream;
-    try{
-      stream=session.promptStreaming([
-        {role:'user',content:userText},
-        {role:'assistant',content:'Réponse :\\n',prefix:true}]);
-    }catch{stream=session.promptStreaming(userText)}
-    for await(const chunk of stream){ans=chunk;llmout.innerHTML=md(ans)}
-    ans=ans.replace(/^\\s*(User|Assistant|System|Model|End)\\s*[:.]\\s*/gim,'')
-           .replace(/^\\s*Réponse\\s*:\\s*/,'').trim();
-    if(isEcho(ans,userText))throw new Error('echo: Nano a répété le prompt');
+    for await(const chunk of session.promptStreaming(input)){
+      ans=chunk;llmout.innerHTML=md(ans)}
     return ans;
   }finally{if(session.destroy)session.destroy()}
+}
+async function nanoPrompt(sys,userText,llmst,t){
+  // 1) préfixe assistant : le modèle CONTINUE depuis « Réponse : » — il ne peut
+  //    plus générer le tour « User: … End. Model: »
+  // 2) tout échec → nouvelle session + prompt string simple
+  let ans;
+  try{
+    ans=await nanoAttempt(sys,[
+      {role:'user',content:userText},
+      {role:'assistant',content:'Réponse :\\n',prefix:true}],llmst,t);
+  }catch{ans=await nanoAttempt(sys,userText,llmst,t)}
+  ans=ans.replace(/^\\s*(User|Assistant|System|Model|End)\\s*[:.]\\s*/gim,'')
+         .replace(/^\\s*Réponse\\s*:\\s*/,'').trim();
+  if(isEcho(ans,userText))throw new Error('echo: Nano a répété le prompt');
+  return ans;
 }
 /* Nano : prompt court, transcript EN TÊTE, consigne en position terminale
    (« Réponse : » force le point de continuation — sinon le 3B recrache
@@ -417,6 +423,14 @@ async function runNano(sys,title,segs,llmst,t){
     const used=probe.inputUsage||0;
     maxChars=Math.max(600,Math.floor((quota-used)*0.8*2.2));
   }finally{if(probe.destroy)probe.destroy()}
+  // Warm-up : si Nano échoit même une consigne triviale, le modèle n'est pas
+  // prêt (téléchargement/chargement en cours) — on aborte avant le map.
+  llmst.textContent=`⏳ ${t.name} — vérification du modèle…`;
+  let warm='';
+  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t)}catch{}
+  if(!/^\\s*ok\\b/i.test(warm))
+    throw new Error('Gemini Nano ne répond pas correctement encore '+
+      '(modèle en cours de téléchargement/chargement ?) — réessaie dans 1 min');
   const queue=packSegments(segs,maxChars);
   if(queue.length<=1){
     return nanoPrompt(sys,nanoTask(t,title,
