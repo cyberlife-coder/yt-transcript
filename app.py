@@ -427,10 +427,12 @@ async function runNano(sys,title,segs,llmst,t){
   // prêt (téléchargement/chargement en cours) — on aborte avant le map.
   llmst.textContent=`⏳ ${t.name} — vérification du modèle…`;
   let warm='';
-  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t,false)}catch{}
-  if(!/^\\s*ok\\b/i.test(warm))
-    throw new Error('Gemini Nano ne répond pas correctement encore '+
-      '(modèle en cours de téléchargement/chargement ?) — réessaie dans 1 min');
+  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t,false)}
+  catch(e){warm='[exception: '+(e&&e.message)+']'}
+  console.warn('[yt-t] nano warm-up →',JSON.stringify(warm));
+  if(!/ok/i.test(warm))
+    throw new Error('Gemini Nano répond n’importe quoi : « '+
+      warm.slice(0,140)+' » — cf. console (F12)');
   const queue=packSegments(segs,maxChars);
   if(queue.length<=1){
     return nanoPrompt(sys,nanoTask(t,title,
