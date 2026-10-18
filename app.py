@@ -369,12 +369,26 @@ async function nanoAttempt(sys,input,llmst,t,render=true){
   // Session neuve PAR tentative : une erreur mid-stream laisse la session
   // polluée — jamais de fallback sur la même session.
   const session=await nanoSession(sys,llmst,t);
+  const it=session.promptStreaming(input)[Symbol.asyncIterator]();
+  const TIMEOUT=()=>new Promise((_,rj)=>setTimeout(
+    ()=>rj(new Error('timeout : stream Nano muet 45 s')),45000));
   try{
-    let ans='';
-    for await(const chunk of session.promptStreaming(input)){
-      ans=chunk;if(render)llmout.innerHTML=md(ans)}
+    let ans='',n=0;
+    for(;;){ // watchdog : un stream qui ne produit plus ne doit pas pendre
+      const step=await Promise.race([it.next(),TIMEOUT()]);
+      if(step.done)break;
+      ans=step.value;
+      if(render&&++n%8===0)llmout.innerHTML=md(ans); // throttle : md() est coûteux
+      if(ans.length>6000)break;                    // cap dur : stop le débit
+      const tail=ans.slice(-200);                  // un 3B peut boucler à l'infini
+      if(tail.length===200&&ans.indexOf(tail)!==ans.length-200)break;
+    }
+    if(render)llmout.innerHTML=md(ans);
     return ans;
-  }finally{if(session.destroy)session.destroy()}
+  }finally{
+    try{it.return&&it.return()}catch{}
+    if(session.destroy)session.destroy();
+  }
 }
 async function nanoPrompt(sys,userText,llmst,t,render=true){
   // 1) préfixe assistant : le modèle CONTINUE depuis « Réponse : » — il ne peut
@@ -442,7 +456,7 @@ async function runNano(sys,title,segs,llmst,t){
     return nanoPrompt(sys,nanoTask(t,title,
       segs.map(s=>`[${fmt(s.start)}] ${s.text}`).join(' ')),llmst,t);
   }
-  const partials=[];
+  const partials=[];let fails=0;
   for(let i=0;i<queue.length;i++){
     llmst.textContent=`⏳ ${t.name} — partie ${i+1}/${queue.length}…`;
     const body=queue[i].map(s=>`[${fmt(s.start)}] ${s.text}`).join(' ');
@@ -452,12 +466,16 @@ async function runNano(sys,title,segs,llmst,t){
       partials.push(ans||'_(partie vide)_');
     }catch(e){
       const retriable=/too large|quota|context|echo:/i.test(e&&e.message||'');
-      if(retriable&&queue[i].length>1){ // re-découpe le paquet fautif en deux
+      if(retriable&&queue[i].length>4&&fails<4){ // re-découpe bornée
+        fails++;
         const p=queue[i],mid=p.length>>1;
         queue.splice(i,1,p.slice(0,mid),p.slice(mid));
         i--;continue;
       }
       partials.push(`_(partie ${i+1} illisible : ${e.message||e})_`);
+      if(++fails>8)
+        throw new Error('Nano échoue systématiquement sur ce transcript — '+
+          'repasse en moteur « serveur » pour les longues vidéos');
     }
     llmout.innerHTML=md(partials.join('\\n\\n')); // aperçu progressif
   }
