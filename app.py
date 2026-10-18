@@ -402,7 +402,8 @@ async function nanoPrompt(sys,userText,llmst,t,render=true){
   }catch{ans=await nanoAttempt(sys,userText,llmst,t,render)}
   ans=ans.replace(/^\\s*(User|Assistant|System|Model|End)\\s*[:.]\\s*/gim,'')
          .replace(/^\\s*Réponse\\s*:\\s*/,'').trim();
-  if(isEcho(ans,userText))throw new Error('echo: Nano a répété le prompt');
+  if(isEcho(ans,userText))
+    throw new Error('echo: Nano a répété le prompt — « '+ans.slice(0,90)+' »');
   return ans;
 }
 /* Nano : prompt court, transcript EN TÊTE, consigne en position terminale
@@ -441,14 +442,15 @@ async function runNano(sys,title,segs,llmst,t){
     const used=probe.inputUsage||0;
     maxChars=Math.max(600,Math.floor((quota-used)*0.8*2.2));
   }finally{if(probe.destroy)probe.destroy()}
-  // Warm-up : si Nano échoit même une consigne triviale, le modèle n'est pas
-  // prêt (téléchargement/chargement en cours) — on aborte avant le map.
+  // Warm-up REPRÉSENTATIF : un vrai nanoTask sur les ~5 premiers segments —
+  // « réponds OK » échoit aussi (il contient OK), ça ne prouve rien.
   llmst.textContent=`⏳ ${t.name} — vérification du modèle…`;
+  const probeBody=segs.slice(0,5).map(s=>`[${fmt(s.start)}] ${s.text}`).join(' ');
   let warm='';
-  try{warm=await nanoPrompt(sys,'Réponds uniquement par : OK',llmst,t,false)}
+  try{warm=await nanoPrompt(sys,nanoTask(t,title,probeBody,'test'),llmst,t,false)}
   catch(e){warm='[exception: '+(e&&e.message)+']'}
   console.warn('[yt-t] nano warm-up →',JSON.stringify(warm));
-  if(!/ok/i.test(warm))
+  if(!warm||warm.startsWith('[exception'))
     throw new Error('Gemini Nano répond n’importe quoi : « '+
       warm.slice(0,140)+' » — cf. console (F12)');
   const queue=packSegments(segs,maxChars);
