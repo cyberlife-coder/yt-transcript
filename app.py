@@ -355,11 +355,15 @@ async function nanoSession(sys,llmst,t){
   if(!L)throw new Error('Prompt API absente — Chrome ≥138 requis (ou flag #prompt-api-for-gemini-nano)');
   const a=await L.availability();
   if(a==='unavailable')throw new Error('Gemini Nano indisponible sur cet appareil');
-  return L.create({systemPrompt:sys,temperature:0.3,topK:8,monitor(m){
-    m.addEventListener('downloadprogress',e=>{
-      llmst.textContent='⏳ '+t.name+' — téléchargement Gemini Nano '+Math.round((e.loaded||0)*100)+'%…';
-    });
-  }});
+  return L.create({
+    initialPrompts:[{role:'system',content:sys}],
+    expectedInputs:[{type:'text',languages:['en','fr']}],
+    expectedOutputs:[{type:'text',languages:['fr']}],
+    temperature:0.3,topK:8,monitor(m){
+      m.addEventListener('downloadprogress',e=>{
+        llmst.textContent='⏳ '+t.name+' — téléchargement Gemini Nano '+Math.round((e.loaded||0)*100)+'%…';
+      });
+    }});
 }
 async function nanoAttempt(sys,input,llmst,t,render=true){
   // Session neuve PAR tentative : une erreur mid-stream laisse la session
