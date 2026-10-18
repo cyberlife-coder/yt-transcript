@@ -359,7 +359,7 @@ async function nanoSession(sys,llmst,t){
     initialPrompts:[{role:'system',content:sys}],
     expectedInputs:[{type:'text',languages:['en','fr']}],
     expectedOutputs:[{type:'text',languages:['fr']}],
-    temperature:0.3,topK:8,monitor(m){
+    monitor(m){
       m.addEventListener('downloadprogress',e=>{
         llmst.textContent='⏳ '+t.name+' — téléchargement Gemini Nano '+Math.round((e.loaded||0)*100)+'%…';
       });
@@ -400,6 +400,12 @@ async function nanoPrompt(sys,userText,llmst,t,render=true){
       {role:'user',content:userText},
       {role:'assistant',content:'Réponse :\\n',prefix:true}],llmst,t,render);
   }catch{ans=await nanoAttempt(sys,userText,llmst,t,render)}
+  // Certains builds incluent le contexte sérialisé « User: … End.Model: … »
+  // dans le stream : on ne retient que ce qui suit le DERNIER marqueur Model.
+  if(/\\bEnd\\s*\\.|\\bModel\\s*:/.test(ans)){
+    const m=/(?:End\\s*\\.\\s*)?Model\\s*:\\s*([\\s\\S]*)$/.exec(ans);
+    if(m)ans=m[1];
+  }
   ans=ans.replace(/^\\s*(User|Assistant|System|Model|End)\\s*[:.]\\s*/gim,'')
          .replace(/^\\s*Réponse\\s*:\\s*/,'').trim();
   if(isEcho(ans,userText))
