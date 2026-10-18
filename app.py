@@ -448,35 +448,16 @@ async function runNano(sys,title,segs,llmst,t){
     const used=probe.inputUsage||0;
     maxChars=Math.max(600,Math.floor((quota-used)*0.8*2.2));
   }finally{if(probe.destroy)probe.destroy()}
-  // Diagnostic en 4 variantes : isole create()/options, prompt()/stream, prefix.
-  llmst.textContent=`⏳ ${t.name} — diagnostic du modèle…`;
-  const diag=[];
-  const L=nanoApi(),pok='Réponds juste : OK';
-  const trials=[
-    ['A bare create + prompt()',async()=>{
-      const s=await L.create();const a=await s.prompt(pok);
-      s.destroy&&s.destroy();return a}],
-    ['B options + prompt()',async()=>{
-      const s=await nanoSession(sys,llmst,t);const a=await s.prompt(pok);
-      s.destroy&&s.destroy();return a}],
-    ['C bare create + stream',async()=>{
-      const s=await L.create();let a='';
-      for await(const c of s.promptStreaming(pok))a=c;
-      s.destroy&&s.destroy();return a}],
-    ['D options + stream array+prefix',async()=>{
-      const s=await nanoSession(sys,llmst,t);let a='';
-      for await(const c of s.promptStreaming([
-        {role:'user',content:pok},
-        {role:'assistant',content:'Réponse :',prefix:true}]))a=c;
-      s.destroy&&s.destroy();return a}],
-  ];
-  for(const[name,fn]of trials){
-    try{diag.push([name,JSON.stringify((await fn()).slice(0,120))])}
-    catch(e){diag.push([name,'ERR '+(e&&e.message)])}
-  }
-  console.warn('[yt-t] diagnostic nano');diag.forEach(d=>console.warn(' ',d[0],'→',d[1]));
-  throw new Error('Diagnostic modèle lancé — colle-moi les 4 lignes '+
-    '« [yt-t] diagnostic nano » de la console (F12)');
+  // Warm-up REPRÉSENTATIF : un vrai nanoTask sur les ~5 premiers segments.
+  llmst.textContent=`⏳ ${t.name} — vérification du modèle…`;
+  const probeBody=segs.slice(0,5).map(s=>`[${fmt(s.start)}] ${s.text}`).join(' ');
+  let warm='';
+  try{warm=await nanoPrompt(sys,nanoTask(t,title,probeBody,'test'),llmst,t,false)}
+  catch(e){warm='[exception: '+(e&&e.message)+']'}
+  console.warn('[yt-t] nano warm-up →',JSON.stringify(warm));
+  if(!warm||warm.startsWith('[exception'))
+    throw new Error('Gemini Nano ne génère rien d’exploitable : « '+
+      warm.slice(0,140)+' » — cf. chrome://on-device-internals');
   const queue=packSegments(segs,maxChars);
   if(queue.length<=1){
     return nanoPrompt(sys,nanoTask(t,title,
