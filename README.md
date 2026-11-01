@@ -91,6 +91,8 @@ Toutes les réponses carry `Cache-Control: no-store`. Les erreurs JSON : `{"erro
 | `YTT_YT_MIN_INTERVAL` | `1.5` | espacement minimum entre deux appels sortants vers YouTube (s, anti-ban) |
 | `YTT_HTTP_TIMEOUT` | `30` | timeout des requêtes HTTP génériques (s) |
 | `YTT_LLM_TIMEOUT` | `300` | timeout du stream LLM (s) |
+| `YTT_LLM_MODELS_TIMEOUT` | `15` | timeout du listage des modèles (s) |
+| `YTT_CAPTION_RETRY_DELAY` | `3` | délai entre deux essais sur HTTP 429 (s) |
 
 ## Tests
 
