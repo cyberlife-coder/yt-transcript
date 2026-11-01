@@ -47,6 +47,31 @@ touching YouTube.
 - **Export**: copy the transcript, download as Markdown, live filtering, clickable
   timestamps linking back to YouTube.
 
+## Browser support
+
+| Feature | Browsers |
+|---------|----------|
+| Transcript fetch + **server** LLM analysis | Any modern browser — Chrome, Edge, Firefox, Safari (recent versions). Plain HTML/CSS/JS + `fetch`, no exotic APIs. |
+| On-device **Gemini Nano** analysis (Prompt API / `LanguageModel`) | **Chrome and Chromium-based browsers only** (Chrome, Edge). **Not Firefox, not Safari.** |
+
+Gemini Nano mode requirements (Chrome/Edge):
+
+- Chrome **≥ 138** (Dev/Canary) with flags `#prompt-api-for-gemini-nano` and
+  `#optimization-guide-on-device-model` enabled, **or Chrome/Edge 148+** where the
+  API is enabled by default on desktop.
+- Platforms: Windows 10/11, macOS 13+, Linux, ChromeOS (Chromebook Plus).
+  On Linux, the **official Google Chrome build** is required — distro-packaged
+  Chromium builds ship without the on-device model component.
+- Hardware: ~22 GB free disk on the Chrome profile volume (model ≈ 3 GB),
+  16 GB RAM or a 4+ core CPU.
+- Output languages: `de`, `en`, `es`, `fr`, `ja`.
+- Secure context required (HTTPS or `localhost` — fine for this app).
+- Not available in headless Chromium (CI) — the JS tests mock `LanguageModel` for
+  this reason.
+
+If `LanguageModel` is absent, the settings panel shows "API absent" and the server
+mode keeps working — the app degrades gracefully.
+
 ## Architecture
 
 ```

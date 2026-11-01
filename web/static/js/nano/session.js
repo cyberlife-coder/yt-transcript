@@ -20,7 +20,7 @@ const EXPECTED = {
  *  sinon warning « No output language was specified »). */
 export async function nanoStatus() {
   const L = nanoApi();
-  if (!L) return { ok: false, st: 'absent', msg: 'API absente — nécessite Chrome ≥138 (ou flag #prompt-api-for-gemini-nano)' };
+  if (!L) return { ok: false, st: 'absent', msg: 'Prompt API absent — Chrome/Edge ≥138 (flags #prompt-api-for-gemini-nano) or ≥148 (on by default). Not available in Firefox/Safari.' };
   try {
     const a = await L.availability(EXPECTED);
     if (a === 'available' || a === 'readily') return { ok: true, st: 'available', msg: 'Gemini Nano prêt (modèle embarqué)' };
@@ -36,7 +36,7 @@ export async function nanoStatus() {
  */
 export async function nanoSession(sys, onDownload) {
   const L = nanoApi();
-  if (!L) throw new NanoError('absent', 'Prompt API absente — Chrome ≥138 requis (ou flag #prompt-api-for-gemini-nano)');
+  if (!L) throw new NanoError('absent', 'Prompt API absent — Chrome/Edge ≥138 (flags) or ≥148 (default)');
   // availability() AVEC les langues : évite le warning « No output language specified ».
   const a = await L.availability(EXPECTED);
   if (a === 'unavailable') throw new NanoError('unavailable', 'Gemini Nano indisponible sur cet appareil');
