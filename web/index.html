@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Transcript — YouTube → analyse</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="mark"><span class="dot"></span>Transcript<span id="demo">démo</span></div>
+  <button class="ghost" id="gear" type="button" title="Réglages LLM" aria-label="Réglages">⚙</button>
+</header>
+
+<section id="hero">
+  <canvas id="orb" width="264" height="264" role="img"
+          aria-label="état du traitement"></canvas>
+  <div id="orbstatus" aria-live="polite">Colle une URL YouTube</div>
+  <form id="f">
+    <input type="text" name="url" placeholder="https://www.youtube.com/watch?v=…"
+           required autofocus aria-label="URL de la vidéo YouTube">
+    <button type="submit">Transcrire</button>
+  </form>
+  <div id="opts">
+    <label for="track">piste</label><select name="track" id="track"></select>
+    <label for="tlang">traduire</label>
+    <input type="text" name="tlang" id="tlang" list="tlangs" placeholder="—" autocomplete="off">
+    <datalist id="tlangs"></datalist>
+  </div>
+  <div id="status"></div>
+  <div class="errbox" id="errbox"><span id="errtxt"></span>
+    <details><summary>détail</summary><pre id="errraw" style="white-space:pre-wrap;font-size:.74rem;margin:.4rem 0 0"></pre></details>
+  </div>
+</section>
+
+<section id="doc">
+  <div class="doch">
+    <div class="title" id="doctitle"></div>
+    <span class="count" id="doccount"></span>
+    <input type="search" id="q" placeholder="filtrer…" aria-label="Filtrer le transcript">
+    <button class="ghost" id="c2" type="button">± ts</button>
+    <button class="ghost" id="c1" type="button">copier</button>
+    <button class="ghost" id="c3" type="button" title="télécharger en markdown">↓ .md</button>
+  </div>
+  <div id="out"></div>
+  <div class="nomatch" id="nomatch">aucun segment ne correspond</div>
+</section>
+
+<section id="ai">
+  <div id="llmbar"></div>
+  <details id="thinkdetails"><summary>réflexion du modèle</summary><div id="thinktxt"></div></details>
+  <div id="llmout" class="md"></div>
+</section>
+</div>
+
+<div id="scrim"></div>
+<aside id="admin" role="dialog" aria-modal="true" aria-label="Réglages">
+  <div class="admhead"><b>Réglages</b>
+    <button class="ghost" id="a-close" type="button" aria-label="Fermer les réglages">✕</button></div>
+  <div class="pvcards" id="pvcards" role="radiogroup" aria-label="Moteur d’analyse">
+    <div class="pvcard" data-pv="server" role="radio" aria-checked="true" tabindex="0">
+      <b>🖥 Serveur</b><span>endpoint OpenAI-compatible — le plus capable</span></div>
+    <div class="pvcard" data-pv="nano" role="radio" aria-checked="false" tabindex="0">
+      <b>◉ Gemini Nano</b><span>100% local dans Chrome — privé, plus léger</span></div>
+  </div>
+  <input type="hidden" id="a-provider" value="server">
+  <div class="admgrid">
+    <div class="field"><label for="a-endpoint">endpoint OpenAI-compatible</label>
+      <input id="a-endpoint" placeholder="http://localhost:11434/v1" autocomplete="off"></div>
+    <div class="field"><label for="a-key">api key (optionnel)</label>
+      <input id="a-key" type="password" placeholder="—" autocomplete="off"></div>
+    <div class="field"><label for="a-model">modèle</label>
+      <input id="a-model" list="models" placeholder="nom du modèle" autocomplete="off">
+      <datalist id="models"></datalist></div>
+    <div class="field"><label for="a-models">&nbsp;</label>
+      <button class="ghost" id="a-models" type="button">↻ lister les modèles</button></div>
+  </div>
+  <div class="admstatus" id="a-status" role="status"></div>
+  <div class="gauge" id="a-gauge" style="display:none"><i></i></div>
+  <h2 class="admsect"><b>Templates</b> <span class="small">— system prompt appliqué à la transcription</span></h2>
+  <div id="tpls"></div>
+  <div class="tpl-actions">
+    <button class="ghost" id="a-addtpl" type="button">+ template</button>
+    <button class="ghost" id="a-reset" type="button">réinitialiser</button>
+  </div>
+  <details class="syspreview" id="a-syspreview">
+    <summary>voir le system prompt effectif (template + garde-fou)</summary>
+    <pre id="a-syspre"></pre>
+  </details>
+</aside>
+<div id="toast" role="status"></div>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
