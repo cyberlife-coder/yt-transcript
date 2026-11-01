@@ -1,116 +1,132 @@
 # yt-transcript
 
-Colle une URL YouTube, récupère son transcript (pistes de sous-titres manuelles ou
-auto-générées, avec traduction possible), puis analyse-le avec un LLM — soit via un
-endpoint **OpenAI-compatible** (Ollama, vLLM, omlx…), soit **100 % localement dans
-Chrome** grâce à l'API Prompt embarquée (Gemini Nano).
+Paste a YouTube URL, get its transcript (manual or auto-generated caption tracks,
+with optional translation), then analyze it with an LLM — either through an
+**OpenAI-compatible endpoint** (Ollama, vLLM, omlx…) or **100 % locally in Chrome**
+via the built-in Prompt API (on-device Gemini Nano).
 
-**Aucune dépendance** : Python stdlib uniquement côté serveur, et le frontend est
-servi en statique (HTML / CSS / JS ES modules) — aucun build, aucun bundler, aucun `npm install`.
+**Zero dependencies**: Python standard library only on the server side, and the
+frontend is served as static files (HTML / CSS / JS ES modules) — no build step,
+no bundler, no `npm install`.
 
 ---
 
-## Démarrage rapide
+## Quick start
 
 ```bash
 python3 app.py
 # → http://localhost:8787
 ```
 
-Ouvre l'URL, colle une vidéo YouTube, choisis la piste, lance la transcription, puis
-clique sur un template d'analyse (raccourcis clavier `1`–`9`).
+Open the URL, paste a YouTube video, pick a caption track, run the transcription,
+then click an analysis template (keyboard shortcuts `1`–`9`).
 
-### Mode démo (sans réseau, données fictives)
+### Demo mode (no network, fixture data)
 
 ```
 http://localhost:8787/?fixture=1&auto=1&tpl=0
 ```
 
-Transcription + analyse LLM simulées en SSE — idéal pour tester l'UI sans toucher à YouTube.
+Transcription + LLM analysis simulated over SSE — ideal for trying the UI without
+touching YouTube.
 
-## Fonctionnalités
+## Features
 
-- **Transcript YouTube** via l'API interne Innertube (`youtubei/v1/player` → `captionTracks`
-  → `timedtext?fmt=json3`) : pistes manuelles/ASR, traduction (`tlang`), horodatage.
-- **Anti-ban** : cache TTL des réponses player, rate-limiter sur les appels sortants,
-  rotation de clients Innertube, retry borné sur HTTP 429.
-- **Deux moteurs d'analyse** (sélection ⚙) :
-  - 🖥 **Serveur** — proxy SSE vers n'importe quel endpoint OpenAI-compatible ;
-  - ◉ **Gemini Nano** — 100 % local dans Chrome (Prompt API), avec map-reduce pour
-    dépasser la fenêtre de contexte du modèle embarqué, warm-up de santé, watchdog
-    anti-silence et détection de boucles.
-- **Templates personnalisables** (system prompts) stockés en `localStorage`, éditables
-  dans le panneau de réglages.
-- **Export** : copier le transcript, télécharger en Markdown, filtrer en direct,
-  timestamps cliquables renvoyant vers YouTube.
+- **YouTube transcripts** via the internal Innertube API (`youtubei/v1/player` →
+  `captionTracks` → `timedtext?fmt=json3`): manual/ASR tracks, translation (`tlang`),
+  timestamps.
+- **Anti-ban safeguards**: TTL cache for player responses, rate limiter on outgoing
+  calls, Innertube client rotation, bounded retry on HTTP 429.
+- **Two analysis engines** (switch in ⚙):
+  - 🖥 **Server** — SSE proxy to any OpenAI-compatible endpoint;
+  - ◉ **Gemini Nano** — fully local in Chrome (Prompt API), with map-reduce to exceed
+    the on-device model's context window, health warm-up, anti-silence watchdog and
+    loop detection.
+- **Customizable templates** (system prompts) persisted in `localStorage`, editable
+  in the settings panel.
+- **Export**: copy the transcript, download as Markdown, live filtering, clickable
+  timestamps linking back to YouTube.
 
 ## Architecture
 
 ```
-app.py            point d'entrée (bootstrap, ~25 lignes)
-config.py         configuration centralisée (env YTT_*)
-server/           couche HTTP : routing pur, handler, abstractions Request/Response, SSE
-youtube/          client Innertube, parsing captions, cache TTL thread-safe, rate limiter
-llm/              proxy SSE vers endpoint OpenAI-compatible + listage des modèles
-fixtures.py       données du mode démo (?fixture=1)
-web/              frontend statique :
-  index.html        page unique
+app.py            entry point (bootstrap, ~25 lines)
+config.py         centralized configuration (YTT_* env vars)
+server/           HTTP layer: pure routing, handler, Request/Response abstractions, SSE
+youtube/          Innertube client, caption parsing, thread-safe TTL cache, rate limiter
+llm/              SSE proxy to an OpenAI-compatible endpoint + model listing
+fixtures.py       demo-mode data (?fixture=1)
+web/              static frontend:
+  index.html        single page
   static/css/       app.css
-  static/js/        ES modules : main, dom, orb, api, transcript, markdown, settings,
-                    admin, llm, llm-nano (façade)
-    nano/           client Gemini Nano en 4 modules testables :
-                    config (constantes), guards (fonctions pures), session (streaming),
+  static/js/        ES modules: main, dom, orb, api, transcript, markdown, settings,
+                    admin, llm, llm-nano (facade)
+    nano/           Gemini Nano client in 4 testable modules:
+                    config (constants), guards (pure functions), session (streaming),
                     runner (warm-up + map-reduce)
-tests/            29 tests Python (unittest, 100 % mocks — zero appel réseau)
-tests-js/         33 tests JS (node --test, LanguageModel mocké)
+tests/            29 Python tests (unittest, 100 % mocked — zero network calls)
+tests-js/         33 JS tests (node --test, LanguageModel injected/mocked)
 ```
 
-Principes : séparation stricte présentation / domaine / infrastructure, fonctions pures
-testables isolément, pas d'état global mutable non maîtrisé, erreurs typées.
+Design principles: strict presentation / domain / infrastructure separation, pure
+functions tested in isolation, no uncontrolled mutable global state, typed errors.
 
-## API HTTP
+## HTTP API
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| `GET`  | `/` | page web |
-| `GET`  | `/static/…` | fichiers statiques (CSS/JS) |
-| `GET`  | `/api/tracks?url=…[&fixture=1]` | pistes de sous-titres + langues de traduction |
-| `GET`  | `/api/transcript?url=…[&vss=…][&tlang=…][&fixture=1]` | transcript parsé (segments horodatés) |
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET`  | `/` | web page |
+| `GET`  | `/static/…` | static assets (CSS/JS) |
+| `GET`  | `/api/tracks?url=…[&fixture=1]` | caption tracks + translation languages |
+| `GET`  | `/api/transcript?url=…[&vss=…][&tlang=…][&fixture=1]` | parsed transcript (timed segments) |
 | `POST` | `/api/llm/models` | `{endpoint, apiKey}` → `{models: [...]}` |
-| `POST` | `/api/llm` | `{endpoint, apiKey, model, system, user}` → stream SSE `chat/completions` |
+| `POST` | `/api/llm` | `{endpoint, apiKey, model, system, user}` → SSE stream of `chat/completions` |
 
-Toutes les réponses carry `Cache-Control: no-store`. Les erreurs JSON : `{"error": "…"}`.
+All responses carry `Cache-Control: no-store`. JSON errors: `{"error": "…"}`.
 
-## Configuration (variables d'environnement)
+## Configuration (environment variables)
 
-| Variable | Défaut | Rôle |
-|----------|--------|------|
-| `YTT_HOST` / `YTT_PORT` | `127.0.0.1` / `8787` | interface et port d'écoute |
-| `YTT_PLAYER_TTL` | `300` | TTL du cache des réponses player YouTube (s) |
-| `YTT_PLAYER_CACHE_MAX` | `200` | plafond du cache player |
-| `YTT_YT_MIN_INTERVAL` | `1.5` | espacement minimum entre deux appels sortants vers YouTube (s, anti-ban) |
-| `YTT_HTTP_TIMEOUT` | `30` | timeout des requêtes HTTP génériques (s) |
-| `YTT_LLM_TIMEOUT` | `300` | timeout du stream LLM (s) |
-| `YTT_LLM_MODELS_TIMEOUT` | `15` | timeout du listage des modèles (s) |
-| `YTT_CAPTION_RETRY_DELAY` | `3` | délai entre deux essais sur HTTP 429 (s) |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `YTT_HOST` / `YTT_PORT` | `127.0.0.1` / `8787` | bind interface and port |
+| `YTT_PLAYER_TTL` | `300` | TTL of cached YouTube player responses (s) |
+| `YTT_PLAYER_CACHE_MAX` | `200` | player cache size cap |
+| `YTT_YT_MIN_INTERVAL` | `1.5` | minimum spacing between outgoing calls to YouTube (s, anti-ban) |
+| `YTT_HTTP_TIMEOUT` | `30` | generic HTTP timeout (s) |
+| `YTT_LLM_TIMEOUT` | `300` | LLM stream timeout (s) |
+| `YTT_LLM_MODELS_TIMEOUT` | `15` | model listing timeout (s) |
+| `YTT_CAPTION_RETRY_DELAY` | `3` | delay between retries on HTTP 429 (s) |
 
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 29 tests Python, mocks uniquement
-node --test tests-js/                       # 33 tests JS (Node ≥ 18)
+python3 -m unittest discover -s tests -v   # 29 Python tests, mocks only
+node --test tests-js/                       # 33 JS tests (Node ≥ 18)
 ```
 
-Aucun test ne fait d'appel réseau réel : `http_json` est mocké, `LanguageModel` est injecté.
+No test performs a real network call: `http_json` is mocked, `LanguageModel` is injected.
 
-## Sécurité & vie privée
+## Security & privacy
 
-- Mode **Gemini Nano** : tout reste dans le navigateur, aucune donnée ne sort.
-- Mode **serveur** : le transcript transite vers l'endpoint que vous configurez (le vôtre).
-- Le backend n'écrit aucun log de requête (`log_message` neutralisé) et ne stocke rien.
-- Garde-fou injecté dans chaque system prompt : le contenu de la transcription est traité
-  comme une donnée non fiable (pas d'injection d'instructions).
+- **Gemini Nano mode**: everything stays in the browser, nothing leaves the device.
+- **Server mode**: the transcript is sent to the endpoint you configure (your own).
+- The backend writes no request logs (`log_message` is neutralized) and stores nothing.
+- A guardrail is appended to every system prompt: the transcript content is treated as
+  untrusted data (no instruction injection).
 
-## Licence
+## Contributing
 
-MIT © 2026 Wiscale
+See [CONTRIBUTING.md](CONTRIBUTING.md). By participating, you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security reports
+
+See [SECURITY.md](SECURITY.md) — please do not open public issues for vulnerabilities.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Wiscale
